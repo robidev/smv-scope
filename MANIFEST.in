@@ -1,0 +1,4 @@
+include smvscope
+recursive-include smvScope/templates *
+recursive-include smvScope/static *
+global-exclude *.pyc

@@ -3,24 +3,22 @@
 import os,sys
 import ctypes
 import time
-import lib61850
+from smvScope import lib61850
 import json
 from datetime import datetime
 
 from flask import Flask, Response, render_template
 
-import gzip
-
 application = Flask(__name__)
 
 colors = ['rgb(99, 132, 255)','rgb(255, 99, 132)','rgb(132, 255, 99)','rgb(99, 99, 99)','rgb(0, 132, 255)','rgb(255, 0, 132)','rgb(132, 255, 0)','rgb(99, 99, 0)']
 
-dataConfig =  {
+dataConfig = {
                 'labels': [],
                 'datasets': [],
             }
 
-optionsConfig={
+optionsConfig = {
                 'animation': False,
                 'responsive': True, #for resizing
                 'title': {
@@ -136,6 +134,21 @@ def svUpdateListener ( subscriber, parameter,  asdu):
     running = True
 
 
+def smv_data():
+    while True:
+        if seconds > 2:
+            allData = {}
+            if True:
+                allData['dataSets'] = smp[seconds-1]
+            if True:
+                SetDataConfig(dataSets)
+                allData['config_data'] = dataConfig
+                allData['config_options'] = optionsConfig
+            json_data = json.dumps(allData)
+            #json_data = json.dumps({ 'dataSets': smp[seconds-1] })
+            yield f"data:{json_data}\n\n"
+        time.sleep(1)
+
 
 @application.route('/')
 def index():
@@ -144,51 +157,58 @@ def index():
 
 @application.route('/chart-data')
 def chart_data():
-    def smv_data():
-        while True:
-            if seconds > 2:
-                allData = {}
-                if True:
-                    allData['dataSets'] = smp[seconds-1]
-                if True:
-                    SetDataConfig(dataSets)
-                    allData['config_data'] = dataConfig
-                    allData['config_options'] = optionsConfig
-                json_data = json.dumps(allData)
-                #json_data = json.dumps({ 'dataSets': smp[seconds-1] })
-                yield f"data:{json_data}\n\n"
-            time.sleep(1)
-
     return Response(smv_data(), mimetype='text/event-stream')
 
 
+def determine_path():
+    """Borrowed from wxglade.py"""
+    try:
+        root = __file__
+        if os.path.islink (root):
+            root = os.path.realpath (root)
+        return os.path.dirname (os.path.abspath (root))
+    except:
+        print("I'm sorry, but something is wrong.")
+        print("There is no __file__ variable. Please contact the author.")
+        sys.exit ()
+        
+def start ():
+    path = determine_path()
+    print( "path:" + path )
+    print("Data files path:")
 
-receiver = lib61850.SVReceiver_create()
-lib61850.SVReceiver_setInterfaceId(receiver, sys.argv[1])
+    files = [f for f in os.listdir(path + "/templates")]
+    print("\n" + path + "/templates")
+    print(files)
 
-subscriber = lib61850.SVSubscriber_create(None, 0x4000)
+    print("\n" + path + "/static")
+    files = [f for f in os.listdir(path + "/static")]
+    print(files)
+    print("\n")
+    
+    receiver = lib61850.SVReceiver_create()
+    lib61850.SVReceiver_setInterfaceId(receiver, sys.argv[1])
 
-cb = lib61850.SVUpdateListener(svUpdateListener)
+    subscriber = lib61850.SVSubscriber_create(None, 0x4000)
 
-lib61850.SVSubscriber_setListener(subscriber, cb, None)
-lib61850.SVReceiver_addSubscriber(receiver, subscriber)
+    cb = lib61850.SVUpdateListener(svUpdateListener)
 
-lib61850.SVReceiver_start(receiver)
+    lib61850.SVSubscriber_setListener(subscriber, cb, None)
+    lib61850.SVReceiver_addSubscriber(receiver, subscriber)
 
-if lib61850.SVReceiver_isRunning(receiver) == False:
-    print("Failed to start SV subscriber. Reason can be that the Ethernet interface doesn't exist or root permission are required.")
-    exit(-1)
+    lib61850.SVReceiver_start(receiver)
 
+    if lib61850.SVReceiver_isRunning(receiver) == False:
+        print("Failed to start SV subscriber. Reason can be that the Ethernet interface doesn't exist or root permission are required.")
+        sys.exit(-1)
 
-if __name__ == '__main__':
     application.run(debug=False, threaded=True) # debug=true will start 2 subscriber threads
 
+    lib61850.SVReceiver_stop(receiver)
+    lib61850.SVReceiver_destroy(receiver)
 
-lib61850.SVReceiver_stop(receiver)
-lib61850.SVReceiver_destroy(receiver)
-
-
-
+if __name__ == "__main__":
+    start()
 
 
 

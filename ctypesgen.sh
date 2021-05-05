@@ -1,6 +1,7 @@
 #~/bin/bash
 
-/usr/local/bin/ctypesgen -l \
+#/usr/local/bin/ctypesgen -l \
+/home/user/.local/bin/ctypesgen -l \
 	/usr/local/lib/libiec61850.so -I \
 	/usr/local/include/libiec61850 \
 	src/common/inc/libiec61850_common_api.h \

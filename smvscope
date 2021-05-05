@@ -1,0 +1,10 @@
+#!/bin/env python3
+#
+##This will work in development on a relative folder basis
+##It will then work when installed in site-packages on a target system
+##where the runner script is in /usr/bin (or wherever)
+##
+
+import smvScope.svscope
+
+smvScope.svscope.start ()
