@@ -1,9 +1,9 @@
 #~/bin/bash
 
 #/usr/local/bin/ctypesgen -l \
-/home/user/.local/bin/ctypesgen -l \
-	/usr/local/lib/libiec61850.so -I \
-	/usr/local/include/libiec61850 \
+/home/user/.local/bin/ctypesgen \
+	-l libiec61850.so \
+	-I /usr/local/include/libiec61850 \
 	src/common/inc/libiec61850_common_api.h \
 	src/common/inc/linked_list.h src/iec61850/inc/iec61850_client.h \
 	src/iec61850/inc/iec61850_common.h src/iec61850/inc/iec61850_server.h \
