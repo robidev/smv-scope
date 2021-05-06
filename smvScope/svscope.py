@@ -202,7 +202,7 @@ def start ():
         print("Failed to start SV subscriber. Reason can be that the Ethernet interface doesn't exist or root permission are required.")
         sys.exit(-1)
 
-    application.run(debug=False, threaded=True) # debug=true will start 2 subscriber threads
+    application.run(host="0.0.0.0", debug=False, threaded=True) # debug=true will start 2 subscriber threads
 
     lib61850.SVReceiver_stop(receiver)
     lib61850.SVReceiver_destroy(receiver)
