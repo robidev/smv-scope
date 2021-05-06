@@ -2,7 +2,7 @@
 
 #/usr/local/bin/ctypesgen -l \
 /home/user/.local/bin/ctypesgen \
-	-l libiec61850.so \
+	-l libiec61850.so.1.4.2 \
 	-I /usr/local/include/libiec61850 \
 	src/common/inc/libiec61850_common_api.h \
 	src/common/inc/linked_list.h src/iec61850/inc/iec61850_client.h \
