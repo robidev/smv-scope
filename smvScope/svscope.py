@@ -21,9 +21,8 @@ dataConfig = {
 
 optionsConfig = {
                 'animation': False,
-                'responsive': False, #for resizing
-                'height': 30,
-                'maintainAspectRatio': False,
+                'responsive': True, #for resizing
+                #'maintainAspectRatio': False,
                 'title': {
                     'display': True,
                     'text': 'SMV 9-2 values',
@@ -43,7 +42,7 @@ optionsConfig = {
                             'text': 'smpCnt',
                         },
                         #//type: 'linear',#//linear causes first and last sample to connect, causing a line
-			'beginAtZero': True,
+			#'beginAtZero': True,
                         #//min: 0, //seems to start at 1
                         'max': 4000,
                         'minRotation': 0,
@@ -82,8 +81,8 @@ control_data_d['streamSelect'] = { "streamValue": 0 } # selected stream
 # stream info
 #control_data_d['smvSelectedStream'] = { 'appid' : 0x4000 , 'svID' : 'one', 'DataSet' : 'smp1', 'samplesReceived' : 0 }
 
-# select data: R_Amp S_Amp T_Amp N_Amp, R_Volt S_Volt T_Volt N_Volt
-control_data_d['dataSelect'] = { "R_Amp": True, "S_Amp":True, "T_Amp": True, "N_Amp": True, "R_Volt": True, "S_Volt": True, "T_Volt": True, "N_Volt": True }
+# select data: channelCheckbox + index
+control_data_d['dataSelect'] = { "channelCheckbox0": True, }
 
 # filter streams control
 #control_data_d['smvFilter'] = { 'appid' : 0x4000 , 'svID' : 'one', 'DataSet' : 'smp1' } # current filter settings
@@ -202,6 +201,7 @@ def svUpdateListener ( subscriber, parameter,  asdu):
 def smv_data():
     global smp
     global streamInfo
+    global control_data_d
     config_set = False
     while True:
         if seconds > 2:
@@ -211,9 +211,14 @@ def smv_data():
                 SetDataConfig(dataSets)
                 allData['config_data'] = dataConfig
                 allData['config_options'] = optionsConfig
+
+                control_data_d['dataSelect'] = { "channelCheckbox0": True, } # we always need one channel
+                for i in range(1, dataSets):
+                    control_data_d['dataSelect']['channelCheckbox' + str(i)] = True
+                  
                 config_set = True
 
-            allData['dataSets'] = smp[seconds-1]
+            allData['dataSets'] = smp[seconds-1][ int(control_data_d['smvTime']['offsetValue']) : int(control_data_d['smvTime']['rangeValue']) ] # slice
             allData['stream_info'] = streamInfo
 
             json_data = json.dumps(allData)
@@ -248,27 +253,15 @@ def update_setting(control, value):
             gaps = 0
             print("INFO: streamfilter set to: " + streamFilter)
         return True
-    if control == "R_Amp": # handled by client
-        return True
-    if control == "S_Amp": # handled by client
-        return True
-    if control == "T_Amp": # handled by client
-        return True
-    if control == "N_Amp": # handled by client
-        return True
-    if control == "R_Volt": # handled by client
-        return True
-    if control == "S_Volt": # handled by client
-        return True
-    if control == "T_Volt": # handled by client
-        return True
-    if control == "N_Volt": # handled by client
+    if control.startswith( "channelCheckbox" ) == True: # channelCheckbox + index, handled by client 
         return True
     if control == "rangeValue": # handled by client
+        value = int(value)
         if value > 4000 or value < 0:
             return False
         return True
     if control == "offsetValue": # handled by client
+        value = int(value)
         if value > 4000 or value < 0:
             return False
         return True

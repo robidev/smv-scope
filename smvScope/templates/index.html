@@ -19,53 +19,11 @@
 
             <p id="streamInfo">{ stream info }</p>
 
-	    <div class="form-row">
-	      <div class="col-lg"">
+	    <div class="form-row" id="channels">
+	      <div class="col-lg" id="channel0">
 		<div class="form-check form-switch">
-	          <input type="checkbox" class="form-check-input" id="R_Amp" autocomplete="off" style="height: 30px; display: flex; align-items: center;" onchange="sendChange(this)">
-	          <label class="form-check-label" for="R_Amp" style="margin: 7px 0 0;">R (Amp)</label>
-	        </div>
-	      </div>
-	      <div class="col-lg"">
-		<div class="form-check form-switch">
-	          <input type="checkbox" class="form-check-input" id="S_Amp" autocomplete="off" style="height: 30px; display: flex; align-items: center;" onchange="sendChange(this)">
-	          <label class="form-check-label" for="S_Amp" style="margin: 7px 0 0;">S (Amp)</label>
-	        </div>
-	      </div>
-	      <div class="col-lg"">
-		<div class="form-check form-switch">
-	          <input type="checkbox" class="form-check-input" id="T_Amp" autocomplete="off" style="height: 30px; display: flex; align-items: center;" onchange="sendChange(this)">
-	          <label class="form-check-label" for="T_Amp" style="margin: 7px 0 0;">T (Amp)</label>
-	        </div>
-	      </div>
-	      <div class="col-lg"">
-		<div class="form-check form-switch">
-	          <input type="checkbox" class="form-check-input" id="N_Amp" autocomplete="off" style="height: 30px; display: flex; align-items: center;" onchange="sendChange(this)">
-	          <label class="form-check-label" for="N_Amp" style="margin: 7px 0 0;">N (Amp)</label>
-	        </div>
-	      </div>
-	      <div class="col-lg"">
-		<div class="form-check form-switch">
-	          <input type="checkbox" class="form-check-input" id="R_Volt" autocomplete="off" style="height: 30px; display: flex; align-items: center;" onchange="sendChange(this)">
-	          <label class="form-check-label" for="R_Volt" style="margin: 7px 0 0;">R (Volt)</label>
-	        </div>
-	      </div>
-	      <div class="col-lg"">
-		<div class="form-check form-switch">
-	          <input type="checkbox" class="form-check-input" id="S_Volt" autocomplete="off" style="height: 30px; display: flex; align-items: center;" onchange="sendChange(this)">
-	          <label class="form-check-label" for="S_Volt" style="margin: 7px 0 0;">S (Volt)</label>
-	        </div>
-	      </div>
-	      <div class="col-lg"">
-		<div class="form-check form-switch">
-	          <input type="checkbox" class="form-check-input" id="T_Volt" autocomplete="off" style="height: 30px; display: flex; align-items: center;" onchange="sendChange(this)">
-	          <label class="form-check-label" for="T_Volt" style="margin: 7px 0 0;">T (Volt)</label>
-	        </div>
-	      </div>
-	      <div class="col-lg"">
-		<div class="form-check form-switch">
-	          <input type="checkbox" class="form-check-input" id="N_Volt" autocomplete="off" style="height: 30px; display: flex; align-items: center;" onchange="sendChange(this)">
-	          <label class="form-check-label" for="N_Volt" style="margin: 7px 0 0;">N (Volt)</label>
+	          <input type="checkbox" class="form-check-input" id="channelCheckbox0" autocomplete="off" style="height: 30px; display: flex; align-items: center;" onchange="sendChange(this)">
+	          <label class="form-check-label" for="channelCheckbox0" style="margin: 7px 0 0;"> Channel 0</label>
 	        </div>
 	      </div>
 	    </div>
@@ -73,11 +31,6 @@
             <div class="card">
                 <div class="card-body">
                     <canvas id="canvas1"></canvas>
-                </div>
-            </div>
-            <div class="card">
-                <div class="card-body">
-                    <canvas id="canvas2"></canvas>
                 </div>
             </div>
 
@@ -108,14 +61,7 @@
 	      </div>
 	      <div class="form-group col-lg">
 	          <select class="form-control" id="channelSelect"  onchange="sendChange(this)">
-	            <option value=0>R (Amp)</option>
-	            <option value=1>S (Amp)</option>
-	            <option value=2>T (Amp)</option>
-	            <option value=3>N (Amp)</option>
-	            <option value=4>R (Volt)</option>
-	            <option value=5>S (Volt)</option>
-	            <option value=6>T (Volt)</option>
-	            <option value=7>N (Volt)</option>
+	            <option value=0>Channel 0</option>
 	          </select>
 	      </div>
 	      <div class="col-lg col-form-label">
@@ -148,6 +94,8 @@
        if(ref.type == "checkbox") value = ref.checked;
        else value = ref.value;
 
+       //console.log(JSON.stringify({ "id": ref.id, "value": value }));
+
        $.ajax({
             type: "POST",
             data: JSON.stringify({ "id": ref.id, "value": value }),
@@ -166,14 +114,11 @@
 
     $(document).ready(function () {
         const config1 = { type: 'line', }; // settings are populated from server
-        const config2 = { type: 'line', }; // settings are populated from server
 	//element on page
         const context1 = document.getElementById('canvas1').getContext('2d');
-        const context2 = document.getElementById('canvas2').getContext('2d');
 
 	//chart.js object
         const lineChart1 = new Chart(context1, config1);
-        const lineChart2 = new Chart(context2, config2);
 
 	//Receive Server-Sent Event Notifications
         const chart_source = new EventSource("/chart-data");
@@ -182,38 +127,55 @@
             const data = JSON.parse(event.data);
 	    if(data['config_data'] != null) { // update data config
                 config1.data = {};
-		config1.data.datasets = data['config_data']['datasets'].splice(0,4);
-                config2.data = {};
-                config2.data.datasets = data['config_data']['datasets'].splice(0,4); //splice(4,8) does not work????
+		config1.data.datasets = data['config_data']['datasets']; //.splice(0,4);
 	    }
 	    if(data['config_options'] != null) { // update options config
                 config1.options = data['config_options'];
-                config2.options = data['config_options'];
 	    }
 	    if(data['stream_info'] != null) { // update stream info
                 const streamInfo = document.getElementById('streamInfo');
                 streamInfo.innerHTML = JSON.stringify( data['stream_info'] );
+
+
+                var datasets = data['stream_info']['size'] / 8
+                var channelSelect = document.getElementById("channelSelect");
+
+                if(datasets != channelSelect.options.length ) { // only add/remove the items if the current amount mismatches the info
+                  channelSelect.options.length = 1;
+
+		  var channelEnableContainer = document.getElementById("channels");
+		  while (channelEnableContainer.children[1]) { // remove all but keep first child
+		    channelEnableContainer.removeChild(channelEnableContainer.lastChild);
+		  }
+                  var channelEnable = document.getElementById("channel0");
+
+                  for(var i = 1; i < datasets; i++) {
+                    channelSelect.add(new Option("Channel " + i.toString(), i));
+
+		    let clone = channelEnable.cloneNode(true);
+		    clone.id = "channel" + i.toString();
+                    clone.children[0].children[0].id = "channelCheckbox" + i.toString();
+                    clone.children[0].children[1].htmlFor = "channelCheckbox" + i.toString();
+                    clone.children[0].children[1].innerHTML = "Channel " + i.toString();
+		    channelEnableContainer.appendChild(clone);
+                  }
+                }
 	    }
 	    //reset all labels
             config1.data.labels = [];
-            config2.data.labels = [];
             //reset all data
             data['dataSets'][0]['index'].forEach(function (value, i) {
-                if(i < 4) { config1.data.datasets[i].data = []; }
-                else { config2.data.datasets[i-4].data = []; }
+                config1.data.datasets[i].data = []; 
             })
 
             for (var dataset of data['dataSets']) {
                 config1.data.labels.push(dataset.x);
-                config2.data.labels.push(dataset.x);
 		//write all datapoints for this x value
 		dataset['index'].forEach(function (value, i) {
-                    if(i < 4) {	config1.data.datasets[i].data.push({x: dataset.x, y: value.y }); }
-		    else { config2.data.datasets[i-4].data.push({x: dataset.x, y: value.y }); }
+                    config1.data.datasets[i].data.push({x: dataset.x, y: value.y }); 
 		})
             }
             lineChart1.update();
-            lineChart2.update();
         }
         
         const control_source = new EventSource("/control-data");
@@ -221,16 +183,16 @@
         control_source.onmessage = function (event) {
             const data = JSON.parse(event.data);
             for(const dataItem in data) {
-              if(dataItem == "streamSelect_items") {
+              if(dataItem == "streamSelect_items") { // populate stream list with items (means a new stream was discovered)
 		    const streamSelect = document.getElementById('streamValue');
 		    streamSelect.options.length = 0;
 		    var i = 0;
 		    for (var item of data[dataItem]) {
-		      streamSelect.add(new Option(item,i));
+		      streamSelect.add(new Option(item.slice(2,-1),i));
 		      i++;
 		    }
               }
-              else {
+              else { // just update a regular control
 		    for (const prop in data[dataItem] ) {
 		      var obj = document.getElementById( prop );
 		      if (typeof data[dataItem][prop] === "boolean") {
@@ -239,8 +201,17 @@
 		      else {
 		        obj.value = data[dataItem][prop];
 		      }
+
+                      //handle client side actions
+                      if( prop.startsWith("channelCheckbox") && config1.data.datasets) { // is a channel is  set/unset
+                          var index = prop.replace("channelCheckbox","");
+                          if(config1.data.datasets[index]) {
+                              config1.data.datasets[index]['hidden'] = !data[dataItem][prop]; //hide the dataset
+                          }
+                      }
 		    }
               }
+              
             }
         }
     });
