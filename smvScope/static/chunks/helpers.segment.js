@@ -1,5 +1,5 @@
 /*!
- * Chart.js v3.1.1
+ * Chart.js v3.2.1
  * https://www.chartjs.org
  * (c) 2021 Chart.js Contributors
  * Released under the MIT License
@@ -220,6 +220,17 @@ function _capitalize(str) {
 }
 const defined = (value) => typeof value !== 'undefined';
 const isFunction = (value) => typeof value === 'function';
+const setsEqual = (a, b) => {
+  if (a.size !== b.size) {
+    return false;
+  }
+  for (const item of a) {
+    if (!b.has(item)) {
+      return false;
+    }
+  }
+  return true;
+};
 
 const PI = Math.PI;
 const TAU = 2 * PI;
@@ -2418,4 +2429,4 @@ function styleChanged(style, prevStyle) {
   return prevStyle && JSON.stringify(style) !== JSON.stringify(prevStyle);
 }
 
-export { merge as $, _isPointInArea as A, _rlookupByKey as B, toPadding as C, each as D, getMaximumSize as E, _getParentNode as F, readUsedSize as G, HALF_PI as H, throttled as I, supportsEventListenerOptions as J, log10 as K, _factorize as L, finiteOrDefault as M, callback as N, _addGrace as O, PI as P, toDegrees as Q, _measureText as R, _int16Range as S, TAU as T, _alignPixel as U, renderText as V, toFont as W, _toLeftRightCenter as X, _alignStartEnd as Y, overrides as Z, _arrayUnique as _, resolve as a, _capitalize as a0, descriptors as a1, isFunction as a2, _attachContext as a3, _createResolver as a4, _descriptors as a5, mergeIf as a6, uid as a7, debounce as a8, retinaScale as a9, almostWhole as aA, almostEquals as aB, _decimalPlaces as aC, _longestText as aD, _filterBetween as aE, _lookup as aF, getHoverColor as aG, clone$1 as aH, _merger as aI, _mergerIf as aJ, _deprecated as aK, toFontString as aL, splineCurve as aM, splineCurveMonotone as aN, getStyle as aO, fontString as aP, toLineHeight as aQ, PITAU as aR, INFINITY as aS, RAD_PER_DEG as aT, QUARTER_PI as aU, TWO_THIRDS_PI as aV, _angleDiff as aW, clearCanvas as aa, _elementsEqual as ab, getAngleFromPoint as ac, _readValueToProps as ad, _updateBezierControlPoints as ae, _computeSegments as af, _boundSegments as ag, _steppedInterpolation as ah, _bezierInterpolation as ai, _pointInLine as aj, _steppedLineTo as ak, _bezierCurveTo as al, drawPoint as am, addRoundedRectPath as an, toTRBL as ao, toTRBLCorners as ap, _boundSegment as aq, _normalizeAngle as ar, getRtlAdapter as as, overrideTextDirection as at, _textX as au, restoreTextDirection as av, noop as aw, distanceBetweenPoints as ax, _setMinAndMaxByKey as ay, niceNum as az, isArray as b, color as c, defaults as d, effects as e, resolveObjectKey as f, isNumberFinite as g, defined as h, isObject as i, isNullOrUndef as j, clipArea as k, listenArrayEvents as l, unclipArea as m, toPercentage as n, toDimension as o, formatNumber as p, _angleBetween as q, requestAnimFrame as r, sign as s, toRadians as t, unlistenArrayEvents as u, valueOrDefault as v, isNumber as w, _limitValue as x, _lookupByKey as y, getRelativePosition as z };
+export { merge as $, _isPointInArea as A, _rlookupByKey as B, toPadding as C, each as D, getMaximumSize as E, _getParentNode as F, readUsedSize as G, HALF_PI as H, throttled as I, supportsEventListenerOptions as J, log10 as K, _factorize as L, finiteOrDefault as M, callback as N, _addGrace as O, PI as P, toDegrees as Q, _measureText as R, _int16Range as S, TAU as T, _alignPixel as U, renderText as V, toFont as W, _toLeftRightCenter as X, _alignStartEnd as Y, overrides as Z, _arrayUnique as _, resolve as a, _capitalize as a0, descriptors as a1, isFunction as a2, _attachContext as a3, _createResolver as a4, _descriptors as a5, mergeIf as a6, uid as a7, debounce as a8, retinaScale as a9, niceNum as aA, almostWhole as aB, almostEquals as aC, _decimalPlaces as aD, _longestText as aE, _filterBetween as aF, _lookup as aG, getHoverColor as aH, clone$1 as aI, _merger as aJ, _mergerIf as aK, _deprecated as aL, toFontString as aM, splineCurve as aN, splineCurveMonotone as aO, getStyle as aP, fontString as aQ, toLineHeight as aR, PITAU as aS, INFINITY as aT, RAD_PER_DEG as aU, QUARTER_PI as aV, TWO_THIRDS_PI as aW, _angleDiff as aX, clearCanvas as aa, setsEqual as ab, _elementsEqual as ac, getAngleFromPoint as ad, _readValueToProps as ae, _updateBezierControlPoints as af, _computeSegments as ag, _boundSegments as ah, _steppedInterpolation as ai, _bezierInterpolation as aj, _pointInLine as ak, _steppedLineTo as al, _bezierCurveTo as am, drawPoint as an, addRoundedRectPath as ao, toTRBL as ap, toTRBLCorners as aq, _boundSegment as ar, _normalizeAngle as as, getRtlAdapter as at, overrideTextDirection as au, _textX as av, restoreTextDirection as aw, noop as ax, distanceBetweenPoints as ay, _setMinAndMaxByKey as az, isArray as b, color as c, defaults as d, effects as e, resolveObjectKey as f, isNumberFinite as g, defined as h, isObject as i, isNullOrUndef as j, clipArea as k, listenArrayEvents as l, unclipArea as m, toPercentage as n, toDimension as o, formatNumber as p, _angleBetween as q, requestAnimFrame as r, sign as s, toRadians as t, unlistenArrayEvents as u, valueOrDefault as v, isNumber as w, _limitValue as x, _lookupByKey as y, getRelativePosition as z };

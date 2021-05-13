@@ -19,35 +19,11 @@
 
             <p id="streamInfo">{ stream info }</p>
 
-	    <div class="form-row" id="channels">
-	      <div class="col-lg" id="channel0">
-		<div class="form-check form-switch">
-	          <input type="checkbox" class="form-check-input" id="channelCheckbox0" autocomplete="off" style="height: 30px; display: flex; align-items: center;" onchange="sendChange(this)">
-	          <label class="form-check-label" for="channelCheckbox0" style="margin: 7px 0 0;"> Channel 0</label>
-	        </div>
-	      </div>
-	    </div>
-
             <div class="card">
                 <div class="card-body">
                     <canvas id="canvas1"></canvas>
                 </div>
             </div>
-
-	    <div class="form-row">
-	      <div class="col-lg-0 col-form-label">
-                <label for="rangeValue" style="text-align: right; display: block;">Range</label>
-	      </div>
-	      <div class="form-group col-lg-1">
-                <input class="form-control" type="text" placeholder="Range input" id="rangeValue" value=4000 onchange="sendChange(this)">
-	      </div>
-	      <div class="col-lg-0 col-form-label">
-                <label for="offsetValue" style="text-align: right; display: block;">Offset</label>
-	      </div>
-	      <div class="form-group col-lg-1">
-                <input class="form-control" type="text" placeholder="Offset input" id="offsetValue" value=0 onchange="sendChange(this)">
-	      </div>
-	    </div>
             
 	    <div class="form-row">
 	      <div class="col-lg"">
@@ -87,6 +63,10 @@
 <script src="static/bootstrap.min.js"></script>
 <!--suppress JSUnresolvedLibraryURL -->
 <script src="static/chart.min.js"></script>
+<!--suppress JSUnresolvedLibraryURL -->
+<script src="static/hammer.min.js"></script>
+<!--suppress JSUnresolvedLibraryURL -->
+<script src="static/chartjs-plugin-zoom.min.js"></script>
 <script>
     function sendChange(ref)
     {
@@ -110,7 +90,7 @@
             }
         });
     }
-
+    
 
     $(document).ready(function () {
         const config1 = { type: 'line', }; // settings are populated from server
@@ -118,7 +98,7 @@
         const context1 = document.getElementById('canvas1').getContext('2d');
 
 	//chart.js object
-        const lineChart1 = new Chart(context1, config1);
+        const lineChart1 = new Chart(context1, config1);     
 
 	//Receive Server-Sent Event Notifications
         const chart_source = new EventSource("/chart-data");
@@ -143,21 +123,8 @@
                 if(datasets != channelSelect.options.length ) { // only add/remove the items if the current amount mismatches the info
                   channelSelect.options.length = 1;
 
-		  var channelEnableContainer = document.getElementById("channels");
-		  while (channelEnableContainer.children[1]) { // remove all but keep first child
-		    channelEnableContainer.removeChild(channelEnableContainer.lastChild);
-		  }
-                  var channelEnable = document.getElementById("channel0");
-
                   for(var i = 1; i < datasets; i++) {
                     channelSelect.add(new Option("Channel " + i.toString(), i));
-
-		    let clone = channelEnable.cloneNode(true);
-		    clone.id = "channel" + i.toString();
-                    clone.children[0].children[0].id = "channelCheckbox" + i.toString();
-                    clone.children[0].children[1].htmlFor = "channelCheckbox" + i.toString();
-                    clone.children[0].children[1].innerHTML = "Channel " + i.toString();
-		    channelEnableContainer.appendChild(clone);
                   }
                 }
 	    }
@@ -201,14 +168,6 @@
 		      else {
 		        obj.value = data[dataItem][prop];
 		      }
-
-                      //handle client side actions
-                      if( prop.startsWith("channelCheckbox") && config1.data.datasets) { // is a channel is  set/unset
-                          var index = prop.replace("channelCheckbox","");
-                          if(config1.data.datasets[index]) {
-                              config1.data.datasets[index]['hidden'] = !data[dataItem][prop]; //hide the dataset
-                          }
-                      }
 		    }
               }
               

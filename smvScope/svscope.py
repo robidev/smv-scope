@@ -12,6 +12,10 @@ from flask import Flask, Response, render_template, request
 
 application = Flask(__name__)
 
+# TODO enable option to slect datapoint, and retrieve additional data such as quality
+# TODO allow horizontal cursor to select trigger-value
+
+
 colors = ['rgb(99, 132, 255)','rgb(255, 99, 132)','rgb(132, 255, 99)','rgb(99, 99, 99)','rgb(0, 132, 255)','rgb(255, 0, 132)','rgb(132, 255, 0)','rgb(99, 99, 0)']
 
 dataConfig = {
@@ -21,7 +25,7 @@ dataConfig = {
 
 optionsConfig = {
                 'animation': False,
-                'responsive': True, #for resizing
+                #'responsive': True, #for resizing
                 #'maintainAspectRatio': False,
                 'title': {
                     'display': True,
@@ -57,6 +61,21 @@ optionsConfig = {
                         'minRotation': 0,
                         'maxRotation': 0,
                     },
+                },
+                'plugins': {
+                    'zoom': {
+                        'pan': {
+                            'enabled': True,
+                            'mode': 'x',
+                            'overScaleMode': 'x',
+                            #'threshold': 10,
+                        },
+                        'zoom': {
+                            'enabled': True,
+                            'mode': 'xy',
+                            'overScaleMode': 'y',
+                        },
+                    }
                 }
             }
 
@@ -77,19 +96,9 @@ control_data_d_update = True
 # select stream: streamSelect
 control_data_d['streamSelect_items'] = [] # list of streams
 control_data_d['streamSelect'] = { "streamValue": 0 } # selected stream
-
-# stream info
-#control_data_d['smvSelectedStream'] = { 'appid' : 0x4000 , 'svID' : 'one', 'DataSet' : 'smp1', 'samplesReceived' : 0 }
-
-# select data: channelCheckbox + index
-control_data_d['dataSelect'] = { "channelCheckbox0": True, }
-
 # filter streams control
 #control_data_d['smvFilter'] = { 'appid' : 0x4000 , 'svID' : 'one', 'DataSet' : 'smp1' } # current filter settings
 #control_data_d['smvFilterEnabled'] = { 'appid' : True , 'svID' : False, 'DataSet' : False } # current filter control settings
-
-# time control: rangeValue offsetValue
-control_data_d['smvTime'] = { 'rangeValue' : 4000, 'offsetValue' : 0 } # current timescale settings
 
 # trigger control: triggerCheck channelSelect compareSelect tresholdInput
 control_data_d['smvTrigger'] = { 'triggerCheck' : False, 'channelSelect' : 0, 'compareSelect' : 1, 'tresholdInput' : 0 } # current filter settings
@@ -103,6 +112,7 @@ control_data_d['smvTrigger'] = { 'triggerCheck' : False, 'channelSelect' : 0, 'c
 def SetDataConfig(amount):
     dataConfig['datasets'] = []
     for idx in range(amount):
+        hidden = False if idx  < 4 else True # to limit the default amount of data shown
         channel = f"Channel {idx}" 
         dataConfig['datasets'].append( {
                     'pointRadius': 0,
@@ -116,6 +126,7 @@ def SetDataConfig(amount):
                     'parsing': False,
                     'normalized': True,
                     'borderDash': [],
+                    'hidden': hidden,
                 } )
 
 
@@ -212,13 +223,13 @@ def smv_data():
                 allData['config_data'] = dataConfig
                 allData['config_options'] = optionsConfig
 
-                control_data_d['dataSelect'] = { "channelCheckbox0": True, } # we always need one channel
-                for i in range(1, dataSets):
-                    control_data_d['dataSelect']['channelCheckbox' + str(i)] = True
+                #control_data_d['dataSelect'] = { "channelCheckbox0": True, } # we always need one channel
+                #for i in range(1, dataSets):
+                #    control_data_d['dataSelect']['channelCheckbox' + str(i)] = True
                   
                 config_set = True
 
-            allData['dataSets'] = smp[seconds-1][ int(control_data_d['smvTime']['offsetValue']) : int(control_data_d['smvTime']['rangeValue']) ] # slice
+            allData['dataSets'] = smp[seconds-1] #[ int(control_data_d['smvTime']['offsetValue']) : int(control_data_d['smvTime']['rangeValue']) ] # slice
             allData['stream_info'] = streamInfo
 
             json_data = json.dumps(allData)
@@ -253,25 +264,23 @@ def update_setting(control, value):
             gaps = 0
             print("INFO: streamfilter set to: " + streamFilter)
         return True
-    if control.startswith( "channelCheckbox" ) == True: # channelCheckbox + index, handled by client 
+    #if control == "rangeValue": # handled by client
+    #    value = int(value)
+    #    if value > 4000 or value < 0:
+    #        return False
+    #    return True
+    #if control == "offsetValue": # handled by client
+    #    value = int(value)
+    #    if value > 4000 or value < 0:
+    #        return False
+    #    return True
+    if control == "triggerCheck": # TODO handled by client
         return True
-    if control == "rangeValue": # handled by client
-        value = int(value)
-        if value > 4000 or value < 0:
-            return False
+    if control == "channelSelect": # TODO handled by client
         return True
-    if control == "offsetValue": # handled by client
-        value = int(value)
-        if value > 4000 or value < 0:
-            return False
+    if control == "compareSelect": # TODO handled by client
         return True
-    if control == "triggerCheck": # handled by client
-        return True
-    if control == "channelSelect": # handled by client
-        return True
-    if control == "compareSelect": # handled by client
-        return True
-    if control == "tresholdInput": # handled by client
+    if control == "tresholdInput": # TODO handled by client
         return True
     return False
 
