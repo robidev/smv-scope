@@ -10,294 +10,189 @@ import types
 
 from flask import Flask, Response, render_template, request
 
+import socket
+from struct import *
+import threading
+import binascii
+
 application = Flask(__name__)
 
-# TODO enable option to slect datapoint, and retrieve additional data such as quality
-# TODO allow horizontal cursor to select trigger-value
-
-
-colors = ['rgb(99, 132, 255)','rgb(255, 99, 132)','rgb(132, 255, 99)','rgb(99, 99, 99)','rgb(0, 132, 255)','rgb(255, 0, 132)','rgb(132, 255, 0)','rgb(99, 99, 0)']
-
-dataConfig = {
-                'labels': [],
-                'datasets': [],
-            }
-
-optionsConfig = {
-                'animation': False,
-                #'responsive': True, #for resizing
-                #'maintainAspectRatio': False,
-                'title': {
-                    'display': True,
-                    'text': 'SMV 9-2 values',
-                },
-                'tooltips': {
-                    'mode': 'index',
-                    'intersect': False,
-                },
-                'hover': {
-                    'mode': 'nearest',
-                    'intersect': True,
-                },
-                'scales': {
-                    'x': {
-                        'title': { 
-                            'display': True,
-                            'text': 'smpCnt',
-                        },
-                        #//type: 'linear',#//linear causes first and last sample to connect, causing a line
-			#'beginAtZero': True,
-                        #//min: 0, //seems to start at 1
-                        'max': 4000,
-                        'minRotation': 0,
-                        'maxRotation': 0,
-                    },
-                    'y': {
-                        'title': { 
-                            'display': True,
-                            'text': 'value',
-                        },
-                        'type': 'linear',
-                        'minRotation': 0,
-                        'maxRotation': 0,
-                    },
-                },
-                'plugins': {
-                    'zoom': {
-                        'pan': {
-                            'enabled': True,
-                            'mode': 'x',
-                            'overScaleMode': 'x',
-                            #'threshold': 10,
-                        },
-                        'zoom': {
-                            'enabled': True,
-                            'mode': 'xy',
-                            'overScaleMode': 'y',
-                        },
-                    }
-                }
-            }
-
-
-oldSmpCnt = 0
-smp = {}
-smp[0] = []
-seconds = 0
-running = False
-dataSets = 0
-streamFilter = None
-streamList = {}
-streamInfo = {}
-gaps = 0
 
 control_data_d = {}
 control_data_d_update = True
-# select stream: streamSelect
+
+# streamlistener data
+streamListingThread = threading.Thread()
+streamList = []
+StreamDetails = {}
+
+#stream data
+subscribers_list = []
+# subscribe/unsibscribe data
+receiver = None
+subscribers = {}
+streamFilter = {}
+
+# subscriber callback data
+smv_data = {}
+sec_counter = {}
+streamInfo = {}
+oldSmpCnt = {}
+
+# listbox data
 control_data_d['streamSelect_items'] = [] # list of streams
-control_data_d['streamSelect'] = { "streamValue": 0 } # selected stream
-# filter streams control
-#control_data_d['smvFilter'] = { 'appid' : 0x4000 , 'svID' : 'one', 'DataSet' : 'smp1' } # current filter settings
-#control_data_d['smvFilterEnabled'] = { 'appid' : True , 'svID' : False, 'DataSet' : False } # current filter control settings
-
-# trigger control: triggerCheck channelSelect compareSelect tresholdInput
-control_data_d['smvTrigger'] = { 'triggerCheck' : False, 'channelSelect' : 0, 'compareSelect' : 1, 'tresholdInput' : 0 } # current filter settings
-
-# sample info
-#control_data_d['smvSample'] = { 'index' : 0, 'sample' : 'data' } # all data from a specific sample
-
-# error messages; missing samples, packets, lost streams etc.
-#control_data_d['errors'] = { 'message' : 'text' } # messages related to errors
-
-def SetDataConfig(amount):
-    dataConfig['datasets'] = []
-    for idx in range(amount):
-        hidden = False if idx  < 4 else True # to limit the default amount of data shown
-        channel = f"Channel {idx}" 
-        dataConfig['datasets'].append( {
-                    'pointRadius': 0,
-                    'stepped': False,
-                    'tension': 0,
-                    'label': channel,
-                    'backgroundColor': colors[idx],
-                    'borderColor': colors[idx],
-                    'data': [],
-                    'fill': False,
-                    'parsing': False,
-                    'normalized': True,
-                    'borderDash': [],
-                    'hidden': hidden,
-                } )
+control_data_d['streamSelect'] = { "streamValue": [] } # selected stream
 
 
-# 
-# critical path
-# 
-def svUpdateListener ( subscriber, parameter,  asdu):
-    global oldSmpCnt
-    global smp
-    global seconds
-    global running
-    global dataSets
-    global streamFilter
+
+# duration can be > 0 to set a timeout, 0 for immediate and -1 for infinite
+def getSMVStreams(interface, duration):
     global streamList
-    global streamInfo
-    global gaps
+    global StreamDetails
+    #Convert a string of 6 characters of ethernet address into a dash separated hex string
+    def eth_addr (a) :
+        b = "%.2x:%.2x:%.2x:%.2x:%.2x:%.2x" % ((a[0]) , (a[1]) , (a[2]), (a[3]), (a[4]) , (a[5]))
+        return b
 
-    svID = str(lib61850.SVSubscriber_ASDU_getSvId(asdu))
-    streamList[svID] = time.monotonic() # store time of last received sample (this also serves a a way to know the streams that are received)
+    ret =  os.system("ifconfig %s promisc" % interface)
+    if ret != 0:
+        print("error setting promiscuous mode on %s" % sys.argv[1])
+        sys.exit(-1)
 
-    if streamFilter != None and svID != streamFilter:
-        print("DEBUG: filter not matched for svID: " + svID)
-        return
+    #create an INET, raw socket
+    #define ETH_P_ALL    0x0003          /* Every packet (be careful!!!) */
+    # SMV                0x88ba
+    # GOOSE              0x88b8
+    s = socket.socket( socket.AF_PACKET , socket.SOCK_RAW , socket.ntohs(0x88ba))
+    #s.setsockopt(socket.SOL_SOCKET, 25, str(interface + '\0').encode('utf-8'))
+    s.bind((interface,0))
 
-    smpCnt = lib61850.SVSubscriber_ASDU_getSmpCnt(asdu)
-    #print("  smpCnt: %i" % smpCnt)
+    streams = []
 
-    #print("  confRev: %u" % lib61850.SVSubscriber_ASDU_getConfRev(asdu))
-    #print("  smpSynch: %u" % lib61850.SVSubscriber_ASDU_getSmpSynch(asdu))
-    size = lib61850.SVSubscriber_ASDU_getDataSize(asdu)
-    #print("  size:%i" % size)
+    # handle duration
+    if duration == 0:
+        s.settimeout(0)
+        s.setblocking(0)
+    if duration > 0:
+        s.settimeout(1)
+        deadline = time.perf_counter() + duration
 
-    # check for missing packets. first packet is ginored
-    if smpCnt != (oldSmpCnt + 1) % 4000 and running:
-        #print("ERROR: smpCnt expected: %i, received: %i" % ((oldSmpCnt + 1) % 4000, smpCnt))
-        # fill missing packets with null samples
-        c = smpCnt
-        o = oldSmpCnt + 1
-        while c != o:
-            indices = []
-            for _ in range(0,size,8):
-                indices.append( {'y': 0 } )
-            smp[seconds].append( {'x': smpCnt, 'index': indices } )
-            gaps = gaps + 1 # counter
-            o = (o + 1) % 4000
-
-    # list with all y values (4x amp and 4x volt for 9-2 LE)
-    indices = []
-    for item in range(0,size,8):
-        indices.append( {'y': lib61850.SVSubscriber_ASDU_getINT32(asdu, item) } )
-
-    # json list with { x: samplecount, index: [{y:_},{y:_},{y:_},...] }
-    smp[seconds].append( {'x': smpCnt, 'index': indices } )
-
-    # increment the secod counter each 4000 sampled, i.e each second
-    if oldSmpCnt > smpCnt: # trigger second increment when the counter loops.(i.e. when the previous smpCnt is higher then the current, we assume we looped around from 4000 to 0)
-        seconds = seconds + 1
-        smp[seconds] = [] # create a new list to store the samples
-        dataSets = int(size/8)
-        streamInfo = {
-                             'size': size, 
-                             'seconds': seconds, 
-                             'svID': svID,
-                             'confRev': lib61850.SVSubscriber_ASDU_getConfRev(asdu), 
-                             'smpSync': lib61850.SVSubscriber_ASDU_getSmpSynch(asdu),
-                             'gaps': gaps,
-                           }
-        # OPTIONAL; not in 9-2 LE, source:https://knowledge.rtds.com/hc/en-us/article_attachments/360074685173/C_Kriger_Adewole_RTDS.pdf
-        if lib61850.SVSubscriber_ASDU_hasDatSet(asdu) == True:
-            streamInfo['datset'] = lib61850.SVSubscriber_ASDU_getDatSet(asdu)
-        if lib61850.SVSubscriber_ASDU_hasSmpRate(asdu) == True:
-            streamInfo['smpRate'] = lib61850.SVSubscriber_ASDU_getSmpRate(asdu)
-        if lib61850.SVSubscriber_ASDU_hasRefrTm(asdu) == True:
-            streamInfo['RefTm'] = lib61850.SVSubscriber_ASDU_getRefrTmAsMs(asdu)
-        if lib61850.SVSubscriber_ASDU_hasSmpMod(asdu) == True:
-            streamInfo['smpMod'] = lib61850.SVSubscriber_ASDU_getSmpMod(asdu)
-                             
-
-    oldSmpCnt = smpCnt
-    running = True # to ignore the first sample, so that oldSmpCnt is initialized
-
-
-def smv_data():
-    global smp
-    global streamInfo
-    global control_data_d
-    config_set = False
     while True:
-        if seconds > 2:
-            allData = {}
+        if duration > 0 and time.perf_counter() > deadline:
+            break
+        try:
+            packet = s.recvfrom(65565)
+        except:
+            continue
 
-            if config_set == False:
-                SetDataConfig(dataSets)
-                allData['config_data'] = dataConfig
-                allData['config_options'] = optionsConfig
+        #packet string from tuple
+        packet = packet[0]
+        #parse ethernet header
+        eth_length = 14
+        dst = eth_addr(packet[0:6])
+        src = eth_addr(packet[6:12])
+        # parse GOOSE streams, and make a list of them (record appid, MAC, gocbRef, )
+        # when an element is chosen, the subscriber can be initialised
+        # when a different element is chosen, re-init subscriber with new gocbRef    
+        appid = unpack('!H' , packet[eth_length:eth_length+2] )[0]
 
-                #control_data_d['dataSelect'] = { "channelCheckbox0": True, } # we always need one channel
-                #for i in range(1, dataSets):
-                #    control_data_d['dataSelect']['channelCheckbox' + str(i)] = True
-                  
-                config_set = True
+        svID_length = 31
+        svID_size = int(packet[svID_length + 1])
+        svID = packet[svID_length + 2 : svID_length + 2 + svID_size].decode("utf-8")
+        #print("mac: %s, appid: %i, gocbRef: %s, gocbRef_size: %i" % (dst, appid, gocbRef, gocbRef_size))
+        #item = "%s %i %s" % (dst,appid,gocbRef)
+        if svID not in StreamDetails:
+            StreamDetails[svID] = {'src': src, 'dst': dst, 'appid': appid}
+        else:
+            if StreamDetails[svID]['src'] != src or StreamDetails[svID]['dst'] != dst:
+                print("ERROR: goose collision! message received with matching gocbref: %s but;" % svID)
+                if StreamDetails[svID]['src'] != src:
+                    print("  src mac not matching: expected: %s, received: %s" % (StreamDetails[svID]['src'], src))
+                if StreamDetails[svID]['dst'] != dst:
+                    print("  dst mac not matching: expected: %s, received: %s" % (StreamDetails[svID]['dst'], dst))               
+                if StreamDetails[svID]['appid'] != appid:
+                    print("  appid not matching: expected: %s, received: %s" % (StreamDetails[svID]['appid'], appid))
+                print("NOTE: gocbref are expected to be unique for each stream")
 
-            allData['dataSets'] = smp[seconds-1] #[ int(control_data_d['smvTime']['offsetValue']) : int(control_data_d['smvTime']['rangeValue']) ] # slice
-            allData['stream_info'] = streamInfo
+        for channel in range(8):
+            item = "%s,%i" % (svID,channel)
+            if item not in streams:
+                streams.append(item)
 
-            json_data = json.dumps(allData)
-            #json_data = json.dumps({ 'dataSets': smp[seconds-1] })
-            yield f"data:{json_data}\n\n"
-        time.sleep(1)
+        if duration == 0:
+            break
+        if duration < 0:
+            streamList = streams
 
+    s.close()
+    return streams
 
-def update_setting(control, value):
-    global control_data_d
-
-    if control == "streamValue":
-        global streamFilter
-        global oldSmpCnt
-        global smp
-        global seconds
-        global running
-        global dataSets
-        global streamInfo
-        global gaps
-        # if filter becomes a different value
-        if streamFilter != control_data_d['streamSelect_items'][int(value)]:
-            streamFilter = control_data_d['streamSelect_items'][int(value)]
-            # reset values after filter change
-            oldSmpCnt = 0
-            smp = {}
-            smp[0] = []
-            seconds = 0
-            running = False
-            dataSets = 0
-            streamInfo = {}
-            gaps = 0
-            print("INFO: streamfilter set to: " + streamFilter)
-        return True
-    #if control == "rangeValue": # handled by client
-    #    value = int(value)
-    #    if value > 4000 or value < 0:
-    #        return False
-    #    return True
-    #if control == "offsetValue": # handled by client
-    #    value = int(value)
-    #    if value > 4000 or value < 0:
-    #        return False
-    #    return True
-    if control == "triggerCheck": # TODO handled by client
-        return True
-    if control == "channelSelect": # TODO handled by client
-        return True
-    if control == "compareSelect": # TODO handled by client
-        return True
-    if control == "tresholdInput": # TODO handled by client
-        return True
-    return False
 
 @application.route('/')
 def index():
+    control_data_d_update = True
     return render_template('index.html')
 
 
-@application.route('/chart-data')
-def chart_data():
-    return Response(smv_data(), mimetype='text/event-stream')
+def update_setting(subject, control, value):
+    if control == "streamValue":
+        global control_data_d
+        global control_data_d_update
+        global streamList
+        global subscribers_list
+        global receiver
+        global smv_data
+
+        dif_off = set(subscribers_list) - set(value)
+        dif_on = set(value) - set(subscribers_list)
+        print(dif_off)
+        print(dif_on)
+        for item in dif_off:
+            stream = streamList[int(item)-1].split(',') # svID from itemlist
+            svID = stream[0]
+            channel = int(stream[1])
+            unsubscribe(receiver, svID, channel, start = True)
+            print("INFO: SMV item %s unsubscribed" % item)
+        for item in dif_on:
+            stream = streamList[int(item)-1].split(',') # svID from itemlist
+            svID = stream[0]
+            channel = int(stream[1])
+
+            if svID not in smv_data:
+                sec_counter[svID] = 0
+                smv_data[svID] = {} # ensure we initialised the dataset
+                smv_data[svID][0] = []
+                oldSmpCnt[svID] = 0
+            subscribe(receiver, svID, channel, start = True)
+        # differences have been processed, value is the actual state
+        subscribers_list = value
+
+        if lib61850.SVReceiver_isRunning(receiver) == False:
+            print("ERROR: Failed to enable SMV subscriber")
+        else:# set control-data in the client control if succesfull
+            control_data_d[subject][control] = value 
+        # update the control now
+        control_data_d_update = True
+        return True
+    return False
+
+
+@application.route('/control-setting', methods=['POST'])
+def control_setting(): # post requests with data from client-side javascript events
+    global control_data_d
+    content = request.get_json(silent=True)
+    for subject in control_data_d:
+        if isinstance(control_data_d[subject], dict):    
+            for item in control_data_d[subject]:
+                if item == content['id']:
+                    if update_setting(subject, content['id'],content['value']) != True: # update the setting
+                        print("ERROR: could not update setting: " + content['id'])
+    return json.dumps({'success':True}), 200, {'ContentType':'application/json'} 
 
 
 def control_data_g():
     global control_data_d
     global control_data_d_update
-    global streamFilter
     global streamList
     streamList_Length = 0
     while True:
@@ -309,8 +204,6 @@ def control_data_g():
             for stream in streamList:
                 control_data_d['streamSelect_items'].append(stream)
             streamList_Length = len(streamList)
-            if streamFilter == None:
-                streamFilter = control_data_d['streamSelect_items'][0]
             control_data_d_update = True
 
         # update the controls when a control is updated
@@ -320,28 +213,162 @@ def control_data_g():
             yield f"data:{json_data}\n\n"
 
 
-
 @application.route('/control-data')
 def control_data():
     return Response(control_data_g(), mimetype='text/event-stream')
 
 
-@application.route('/control-setting', methods=['POST'])
-def control_setting(): # post requests with data from client-side javascript events
-    global control_data_d
-    global control_data_d_update
-    content = request.get_json(silent=True)
-    for subject in control_data_d:
-        if isinstance(control_data_d[subject], dict):    
-            for item in control_data_d[subject]:
-                if item == content['id']:
-                    if update_setting(content['id'],content['value']) == True: # update the setting in the app
-                        control_data_d[subject][item] = content['value'] # update the control in the client if succesfull
-                        control_data_d_update = True
-                    else:
-                        print("ERROR: could not update setting: " + content['id'])
+def stream_data_g():
+    global smv_data
+    global streamInfo
+    global sec_counter
+    global streamFilter
 
-    return json.dumps({'success':True}), 200, {'ContentType':'application/json'} 
+    while True:
+        allData = {}
+        allData['dataSets'] = {}
+        allData['stream_info'] = {}
+
+        for svID in streamFilter:
+            second = sec_counter[svID] - 1
+            if second < 1: #ignore the first 2 seconds, so items can be initialised
+                continue
+            allData['dataSets'][svID] = smv_data[svID][second]
+            allData['stream_info'][svID] = streamInfo[svID]
+
+        json_data = json.dumps(allData)
+        yield f"data:{json_data}\n\n"
+        time.sleep(1) # TODO: improve this, at it may be prone to offset errors between sec_counter value of different subscribers
+
+@application.route('/stream-data')
+def stream_data():
+    return Response(stream_data_g(), mimetype='text/event-stream')
+
+
+def svUpdateListener_cb(subscriber, parameter, asdu):
+    svID = lib61850.SVSubscriber_ASDU_getSvId(asdu).decode("utf-8")
+    
+    global streamFilter
+    if svID not in streamFilter:
+        print("DEBUG: filter not matched for svID: " + svID)
+        return
+
+    #print("SMV event: (svID: %s)" % svID)
+    global smv_data
+    global sec_counter
+    global oldSmpCnt
+
+    seconds = sec_counter[svID]
+    size = lib61850.SVSubscriber_ASDU_getDataSize(asdu)
+    smpCnt = lib61850.SVSubscriber_ASDU_getSmpCnt(asdu)
+    #print("  confRev: %u" % lib61850.SVSubscriber_ASDU_getConfRev(asdu))
+    #print("  smpSynch: %u" % lib61850.SVSubscriber_ASDU_getSmpSynch(asdu))
+
+    # list with all y values (4x amp and 4x volt for 9-2 LE)
+    indices = {}
+    for channel in streamFilter[svID]:
+        if channel * 8 < size:
+            indices[channel] =  {'y': lib61850.SVSubscriber_ASDU_getINT32(asdu, channel * 8) }
+        else:
+            print("ERROR: cannot retrieve channel %i for svID: %s, size = ", (channel,svID,size)) 
+
+    # json list with { x: samplecount, index: [{y:_},{y:_},{y:_},...] }
+    smv_data[svID][seconds].append( {'x': smpCnt, 'channels': indices } )
+
+    # increment the secod counter each 4000 sampled, i.e each second
+    if oldSmpCnt[svID] > smpCnt: # trigger second increment when the counter loops.(i.e. when the previous smpCnt is higher then the current, we assume we looped around from 4000 to 0)
+        global streamInfo
+        streamInfo[svID] = {
+                             'size': size, 
+                             'seconds': seconds, 
+                             'svID': str(lib61850.SVSubscriber_ASDU_getSvId(asdu)),
+                             'confRev': lib61850.SVSubscriber_ASDU_getConfRev(asdu), 
+                             'smpSync': 0,#lib61850.SVSubscriber_ASDU_getSmpSynch(asdu),
+                           }
+        # OPTIONAL; not in 9-2 LE, source:https://knowledge.rtds.com/hc/en-us/article_attachments/360074685173/C_Kriger_Adewole_RTDS.pdf
+        if lib61850.SVSubscriber_ASDU_hasDatSet(asdu) == True:
+            streamInfo['datset'] = lib61850.SVSubscriber_ASDU_getDatSet(asdu)
+        if lib61850.SVSubscriber_ASDU_hasSmpRate(asdu) == True:
+            streamInfo['smpRate'] = lib61850.SVSubscriber_ASDU_getSmpRate(asdu)
+        if lib61850.SVSubscriber_ASDU_hasRefrTm(asdu) == True:
+            streamInfo['RefTm'] = lib61850.SVSubscriber_ASDU_getRefrTmAsMs(asdu)
+        if lib61850.SVSubscriber_ASDU_hasSmpMod(asdu) == True:
+            streamInfo['smpMod'] = lib61850.SVSubscriber_ASDU_getSmpMod(asdu)
+
+        #increment counter    
+        seconds = seconds + 1
+        smv_data[svID][seconds] = [] # create a new list to store the samples
+        sec_counter[svID] = seconds
+                             
+    oldSmpCnt[svID] = smpCnt
+    
+
+# make the callback pointer global to prevent cleanup
+svUpdateListener = lib61850.SVUpdateListener(svUpdateListener_cb)
+
+
+def subscribe(receiver, svID, channel, start = True):
+    global streamFilter
+    global StreamDetails
+    global subscribers
+
+    # check if appid already in use in other filters
+    inuse = False
+    appid = StreamDetails[svID]['appid']
+    for key in streamFilter:
+        if StreamDetails[key]['appid'] == appid:
+            inuse = True
+
+    # if appid not yet subscribed to, subscribe
+    if inuse == False:
+        global svUpdateListener
+        if lib61850.SVReceiver_isRunning(receiver) == True:
+            lib61850.SVReceiver_stop(receiver)
+        subscriber = lib61850.SVSubscriber_create(None, appid)
+        subscribers[appid] = subscriber
+
+        lib61850.SVSubscriber_setListener(subscriber, svUpdateListener, None)
+        lib61850.SVReceiver_addSubscriber(receiver, subscriber)
+        streamFilter[svID] = set()
+
+        if start == True:
+            lib61850.SVReceiver_start(receiver)
+            if lib61850.SVReceiver_isRunning(receiver) ==  False:
+                print("Failed to start SMV subscriber. Reason can be that the Ethernet interface doesn't exist or root permission are required.")
+                sys.exit(-1)
+
+    # add the filter
+    streamFilter[svID].add(channel)
+
+    print("INFO: SMV subscribed with: %i %s %i" % (appid, svID, channel))
+
+
+def unsubscribe(receiver, svID, channel, start = True):
+    global streamFilter
+    global StreamDetails
+    global subscribers
+
+    streamFilter[svID].remove(channel)
+    if len(streamFilter[svID]) == 0:
+        streamFilter.pop(svID) # remove filter
+        # check if appid still in use in other filters
+        inuse = False
+        appid = StreamDetails[svID]['appid']
+        for key in streamFilter:
+            if StreamDetails[key]['appid'] == appid:
+                inuse = True
+        if inuse == False:
+            if lib61850.SVReceiver_isRunning(receiver) == True:
+                lib61850.SVReceiver_stop(receiver)
+
+            lib61850.SVReceiver_removeSubscriber(receiver, subscribers[appid])
+
+            if start == True:
+                lib61850.SVReceiver_start(receiver)
+                if lib61850.SVReceiver_isRunning(receiver) ==  False:
+                    print("Failed to start SMV subscriber. Reason can be that the Ethernet interface doesn't exist or root permission are required.")
+                    sys.exit(-1)
+    print("INFO: SMV %s, %i unsubscribed" % (svID, channel))
 
 
 def determine_path():
@@ -352,11 +379,12 @@ def determine_path():
             root = os.path.realpath (root)
         return os.path.dirname (os.path.abspath (root))
     except:
-        print("I'm sorry, but something is wrong.")
-        print("There is no __file__ variable. Please contact the author.")
+        print("ERROR: __file__ variable missing")
         sys.exit ()
         
+
 def start ():
+    global receiver
     path = determine_path()
     print( "path:" + path )
     print("Data files path:")
@@ -369,31 +397,30 @@ def start ():
     files = [f for f in os.listdir(path + "/static")]
     print(files)
     print("\n")
-    
+
+
     receiver = lib61850.SVReceiver_create()
-    lib61850.SVReceiver_setInterfaceId(receiver, sys.argv[1])
+    
+    if len(sys.argv) > 1:
+        print("Set interface id: %s" % sys.argv[1])
+        lib61850.SVReceiver_setInterfaceId(receiver, sys.argv[1])
+    else:
+        print("Using interface eth0")
+        lib61850.SVReceiver_setInterfaceId(receiver, "eth0")
 
-    subscriber = lib61850.SVSubscriber_create(None, 0x4000)
-
-    cb = lib61850.SVUpdateListener(svUpdateListener)
-
-    lib61850.SVSubscriber_setListener(subscriber, cb, None)
-    lib61850.SVReceiver_addSubscriber(receiver, subscriber)
-
-    lib61850.SVReceiver_start(receiver)
-
-    if lib61850.SVReceiver_isRunning(receiver) == False:
-        print("Failed to start SV subscriber. Reason can be that the Ethernet interface doesn't exist or root permission are required.")
-        sys.exit(-1)
+    # general stream listener thread to catch all streams(subscribed and unsubscribed)
+    streamListingThread = threading.Thread(target=getSMVStreams, args=(sys.argv[1],-1))
+    streamListingThread.start()
+    #subs = subscribe(receiver, None, None, "simpleIOGenericIO/LLN0$GO$gcbAnalogValues",str(1))
 
     application.run(host="0.0.0.0", debug=False, threaded=True) # debug=true will start 2 subscriber threads
 
     lib61850.SVReceiver_stop(receiver)
     lib61850.SVReceiver_destroy(receiver)
 
+
 if __name__ == "__main__":
     start()
-
 
 
 

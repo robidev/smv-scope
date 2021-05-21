@@ -2,178 +2,292 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>SmvScope</title>
+    <title>smvScope</title>
     <link href="static/css/bootstrap.min.css" rel="stylesheet">
+<!--suppress JSUnresolvedLibraryURL -->
+<script src="static/jquery.min.js"></script>
+<!--suppress JSUnresolvedLibraryURL -->
+<script src="static/bootstrap.min.js"></script>
+
+  <script src="static/chart.js"></script>
+  <script src="static/hammer.min.js"></script>
+  <script src="static/chartjs-plugin-zoom.min.js"></script>
+    <!--<script src="static/luxon.js"></script>-->
+  <!--<script src="static/chartjs-adapter-luxon.js"></script>-->
+  <!--<script src="static/chartjs-plugin-streaming@2.0.0-beta.2.js"></script>-->
+  <script>
+
+//https://nagix.github.io/chartjs-plugin-streaming/samples/zoom.html
+
+var config = {
+  type: 'line',
+  data: {
+    datasets: [],
+  },
+  options: {
+    animation: false,
+    tooltips: {
+        mode: 'index',
+        intersect: false,
+    },
+    hover: {
+        mode: 'nearest',
+        intersect: true,
+    },
+    scales: {
+      x: {
+        title: { 
+          display: true,
+          text: 'smpCnt',
+        },
+        max: 4000,
+        minRotation: 0,
+        maxRotation: 0,
+      },
+      y: {
+        title: { 
+          display: true,
+          text: 'value',
+        },
+        type: 'linear',
+        minRotation: 0,
+        maxRotation: 0,
+      },
+    },
+    interaction: {
+      intersect: false,
+    },
+    plugins: {
+      title: {
+        display: true,
+        text: 'smvScope',
+      },
+      zoom: {
+        pan: {
+          enabled: true,
+          mode: 'x',
+          overScaleMode: 'x',
+        },
+        zoom: {
+          enabled: true,
+          mode: 'xy',
+          overScaleMode: 'y',
+        },
+        limits: {
+          x: {
+            minDelay: 0,
+            maxDelay: 4000,
+            minDuration: 1000,
+            maxDuration: 20000,
+          }
+        }
+      }
+    }
+  }
+};
+</script>
 </head>
 <body>
 <div class="container">
     <div class="row">
         <div class="col-12">
-
-            <div class="form-group">
-              <label for="streamValue">Stream select</label>
-              <select class="form-control" id="streamValue" onchange="sendChange(this)">
-                <option value=0>None</option>
-              </select>
-            </div>
-
-            <p id="streamInfo">{ stream info }</p>
-
-            <div class="card">
-                <div class="card-body">
-                    <canvas id="canvas1"></canvas>
-                </div>
-            </div>
-            
-	    <div class="form-row">
-	      <div class="col-lg"">
-		<div class="form-check form-switch">
-	          <input type="checkbox" class="form-check-input" id="triggerCheck" autocomplete="off" style="height: 30px; display: flex; align-items: center;" onchange="sendChange(this)">
-	          <label class="form-check-label" for="triggerCheck" style="margin: 7px 0 0;">Trigger</label>
-	        </div>
-	      </div>
-	      <div class="col-lg col-form-label">
-	          <label for="channelSelect" style="text-align: right; display: block;">Channel select</label>
-	      </div>
-	      <div class="form-group col-lg">
-	          <select class="form-control" id="channelSelect"  onchange="sendChange(this)">
-	            <option value=0>Channel 0</option>
-	          </select>
-	      </div>
-	      <div class="col-lg col-form-label">
-	          <label for="compareSelect" style="text-align: right; display: block;"><b>Compare:</b> Value</label>
-	      </div>
-	      <div class="form-group col-lg">
-	          <select class="form-control" id="compareSelect"  onchange="sendChange(this)">
-	            <option value=0>less then</option>
-	            <option value=1>greater then</option>
-	            <option value=2>equals</option>
-	          </select>
-	      </div>
-	      <div class="form-group col-lg">
-	        <input class="form-control" type="text" placeholder="Treshold input" id="tresholdInput" value=0 onchange="sendChange(this)">
-	      </div>
-	    </div>
+          <div class="form-group">
+            <select class="mdb-select colorful-select md-form custom-select" multiple id="streamValue">
+            </select>
+          </div>
+          <div>
+            <canvas id="smvChart"></canvas>
+          </div>
         </div>
     </div>
 </div>
-<!--suppress JSUnresolvedLibraryURL -->
-<script src="static/jquery.min.js"></script>
-<!--suppress JSUnresolvedLibraryURL -->
-<script src="static/bootstrap.min.js"></script>
-<!--suppress JSUnresolvedLibraryURL -->
-<script src="static/chart.min.js"></script>
-<!--suppress JSUnresolvedLibraryURL -->
-<script src="static/hammer.min.js"></script>
-<!--suppress JSUnresolvedLibraryURL -->
-<script src="static/chartjs-plugin-zoom.min.js"></script>
 <script>
-    function sendChange(ref)
-    {
-       var value
-       if(ref.type == "checkbox") value = ref.checked;
-       else value = ref.value;
 
-       //console.log(JSON.stringify({ "id": ref.id, "value": value }));
+var chartColors = {
+  red: 'rgb(255, 99, 132)',
+  yellow: 'rgb(255, 205, 86)',
+  green: 'rgb(75, 192, 192)',
+  blue: 'rgb(0, 0, 255)',
+  red2: 'rgb(255, 0, 0)',
+  green2: 'rgb(0, 255, 0)',
+};
 
-       $.ajax({
-            type: "POST",
-            data: JSON.stringify({ "id": ref.id, "value": value }),
-            url: 'control-setting',
-            dataType: 'json',
-            contentType: "application/json",
-            success: function(res){
-               //console.log(res);
-            },
-            error: function(res){
-               console.log(res);
-            }
-        });
+var color = Chart.helpers.color;
+
+var colorNames = Object.keys(chartColors);
+
+function addDataset(label) {
+  var colorName = colorNames[config.data.datasets.length % colorNames.length];
+  var newColor = chartColors[colorName];
+  var newDataset = {
+    label: label,
+    backgroundColor: color(newColor).alpha(0.5).rgbString(),
+    borderColor: newColor,
+    fill: false,
+    data: [],
+
+    pointRadius: 0,
+    stepped: false,
+    tension: 0,
+    parsing: false,
+    normalized: true,
+    borderDash: [],
+    //hidden: hidden,
+  };
+
+  config.data.datasets.push(newDataset);
+  window.myChart.update();
+  return newDataset;
+}
+
+function sendChange(ref)
+{
+  var value
+  if(ref.type == "checkbox") value = ref.checked;
+  else value = ref.value;
+
+  console.log(JSON.stringify({ "id": ref.id, "value": value }));
+
+  $.ajax({
+      type: "POST",
+      data: JSON.stringify({ "id": ref.id, "value": value }),
+      url: 'control-setting',
+      dataType: 'json',
+      contentType: "application/json",
+      success: function(res){
+          //console.log(res);
+      },
+      error: function(res){
+          console.log(res);
+      }
+  });
+}
+
+function sendChangeMultiple(ref)
+{
+  var pref = ref.parentElement;
+  var options = pref.selectedOptions;
+  var values = Array.from(options).map(({ value }) => value);
+  console.log(values);
+
+  $.ajax({
+      type: "POST",
+      data: JSON.stringify({ "id": pref.id, "value": values }),
+      url: 'control-setting',
+      dataType: 'json',
+      contentType: "application/json",
+      success: function(res){
+          //console.log(res);
+      },
+      error: function(res){
+          console.log(res);
+      }
+  });
+}
+
+window.onload = function() {
+  const ctx = document.getElementById('smvChart').getContext('2d');
+  window.myChart = new Chart(ctx, config);
+  config.data.labels = [];
+  for(var index =1; index < 4000; index++) {
+    config.data.labels.push(index);
+  }
+
+  const stream_source = new EventSource("/stream-data");
+  stream_source.onmessage = function (event) {
+    const cdata = JSON.parse(event.data);
+
+    var infos = ""
+    for(var svID in cdata['stream_info']) {
+      infos += svID + " : " + JSON.stringify(cdata['stream_info'][svID]) + "<BR>";
     }
-    
 
-    $(document).ready(function () {
-        const config1 = { type: 'line', }; // settings are populated from server
-	//element on page
-        const context1 = document.getElementById('canvas1').getContext('2d');
-
-	//chart.js object
-        const lineChart1 = new Chart(context1, config1);     
-
-	//Receive Server-Sent Event Notifications
-        const chart_source = new EventSource("/chart-data");
-
-        chart_source.onmessage = function (event) {
-            const data = JSON.parse(event.data);
-	    if(data['config_data'] != null) { // update data config
-                config1.data = {};
-		config1.data.datasets = data['config_data']['datasets']; //.splice(0,4);
-	    }
-	    if(data['config_options'] != null) { // update options config
-                config1.options = data['config_options'];
-	    }
-	    if(data['stream_info'] != null) { // update stream info
-                const streamInfo = document.getElementById('streamInfo');
-                streamInfo.innerHTML = JSON.stringify( data['stream_info'] );
-
-
-                var datasets = data['stream_info']['size'] / 8
-                var channelSelect = document.getElementById("channelSelect");
-
-                if(datasets != channelSelect.options.length ) { // only add/remove the items if the current amount mismatches the info
-                  channelSelect.options.length = 1;
-
-                  for(var i = 1; i < datasets; i++) {
-                    channelSelect.add(new Option("Channel " + i.toString(), i));
-                  }
-                }
-	    }
-	    //reset all labels
-            config1.data.labels = [];
-            //reset all data
-            data['dataSets'][0]['index'].forEach(function (value, i) {
-                config1.data.datasets[i].data = []; 
-            })
-
-            for (var dataset of data['dataSets']) {
-                config1.data.labels.push(dataset.x);
-		//write all datapoints for this x value
-		dataset['index'].forEach(function (value, i) {
-                    config1.data.datasets[i].data.push({x: dataset.x, y: value.y }); 
-		})
-            }
-            lineChart1.update();
+    var used = [];
+    for(var svID in cdata['dataSets']) { //streams
+      for(var channel in cdata['dataSets'][svID][0]['channels']) {
+        var dset = 'Dataset ' + svID + ',' + channel; //derive label from key stream/channel values
+        var curDataSet = null;
+        config.data.datasets.forEach(function(dataset) { //search for this dataset
+          if( dataset.label === dset){ // if found, add data to it
+            curDataSet = dataset;
+              //return false; //TODO: prevent iteration over all existing datasets, but stop at the first match
+          }
+        });
+        if(curDataSet == null){
+          // no dataset found, so add it
+          curDataSet = addDataset(dset);
         }
-        
-        const control_source = new EventSource("/control-data");
+        used.push(curDataSet);//register the dataset as in use
 
-        control_source.onmessage = function (event) {
-            const data = JSON.parse(event.data);
-            for(const dataItem in data) {
-              if(dataItem == "streamSelect_items") { // populate stream list with items (means a new stream was discovered)
-		    const streamSelect = document.getElementById('streamValue');
-		    streamSelect.options.length = 0;
-		    var i = 0;
-		    for (var item of data[dataItem]) {
-		      streamSelect.add(new Option(item.slice(2,-1),i));
-		      i++;
-		    }
-              }
-              else { // just update a regular control
-		    for (const prop in data[dataItem] ) {
-		      var obj = document.getElementById( prop );
-		      if (typeof data[dataItem][prop] === "boolean") {
-		        obj.checked = data[dataItem][prop];
-		      }
-		      else {
-		        obj.value = data[dataItem][prop];
-		      }
-		    }
-              }
-              
-            }
+        curDataSet.data = []; //clear the data
+        for(var idx in cdata['dataSets'][svID]) {
+          var smpCnt = cdata['dataSets'][svID][idx]['x'];
+          var yval = cdata['dataSets'][svID][idx]['channels'][channel]['y'];
+          
+          curDataSet.data.push({
+            x: smpCnt,
+            y: yval,
+          });
         }
-    });
+      }
+    }
+    config.data.datasets = used; // new set of datasets
+    window.myChart.update();
+  }
+
+  const control_source = new EventSource("/control-data");
+  control_source.onmessage = function (event) {
+    const data = JSON.parse(event.data);
+    for(const dataItem in data) {
+      if(dataItem == "streamSelect_items") { // populate stream list with items (means a new stream was discovered)
+        const streamSelect = document.getElementById('streamValue');
+        streamSelect.options.length = 0;
+        var i = 1;
+        for (var item of data[dataItem]) {
+          var opt = new Option(item,i);
+          
+          opt.onmousedown = function() {
+              if ($(this).is(':selected')) {
+                  $(this).removeAttr('selected');
+                  this.selected = false;
+              } else {
+                  $(this).attr('selected','true');
+                  this.selected = true;
+              }
+              sendChangeMultiple(this);
+              return false;
+            };
+          streamSelect.add(opt);
+          i++;
+        }
+      }
+      else { // just update a regular control
+        for (const prop in data[dataItem] ) {
+          var obj = document.getElementById( prop );
+          if (typeof data[dataItem][prop] === "boolean") {
+            obj.checked = data[dataItem][prop];
+          }
+          if(prop === "streamValue"){//handling for a multiselect list control
+            for(var option of obj.options){
+              if(data[dataItem][prop].includes(option.value) ){
+                option.selected = true;
+                $(option).attr('selected','true');
+              }
+              else{
+                option.selected = false;
+                $(option).removeAttr('selected');
+              }
+            }
+          }
+          else {//any generic control; just update item.value
+            obj.value = data[dataItem][prop];
+          }
+        }
+      } 
+    }
+  }
+
+};
 </script>
 </body>
 </html>
