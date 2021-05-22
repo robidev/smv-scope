@@ -98,6 +98,9 @@ var config = {
           <div>
             <canvas id="smvChart"></canvas>
           </div>
+          <div>
+            <textarea class="form-control" rows="6" readonly id="log"></textarea>
+          </div>
         </div>
     </div>
 </div>
@@ -220,7 +223,7 @@ window.onload = function() {
         used.push(curDataSet);//register the dataset as in use
 
         curDataSet.data = []; //clear the data
-        for(var idx in cdata['dataSets'][svID]) {
+        for(var idx in cdata['dataSets'][svID]) { // TODO: run from 1 to 4000, and set null samples when missing
           var smpCnt = cdata['dataSets'][svID][idx]['x'];
           var yval = cdata['dataSets'][svID][idx]['channels'][channel]['y'];
           
@@ -233,6 +236,16 @@ window.onload = function() {
     }
     config.data.datasets = used; // new set of datasets
     window.myChart.update();
+  }
+  
+  const log_source = new EventSource("/log-data");
+  log_source.onmessage = function (event) {
+    const data = JSON.parse(event.data);
+    var log_item = document.getElementById('log');
+    for(const item of data){
+      log_item.value += item + "\n";
+    }
+    log_item.scrollTop = log_item.scrollHeight;
   }
 
   const control_source = new EventSource("/control-data");
