@@ -33,10 +33,13 @@ NOTE: libiec61850.so.1.4.2 is assumed to be installed in $PATH, if the above com
 
 
 ## Run:  
+from the folder where you cloned the repo  
 `$ sudo ./smvscope [interface]`  
 
 or build and install with:  
-~$ python setup.py build && sudo python setup.py install  
+`$ python setup.py build && sudo python setup.py install`
+
+and run from any location  
 `~$ sudo smvscope [interface]`  
 
 Browse to http://127.0.0.1:5000  
