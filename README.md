@@ -22,11 +22,12 @@ Disabling the "listen for new streams" will stop updating the list of streams, a
 
 
 ## Dependencies:
-Flask 1.0.2  
-    install with;  
-    `~$ pip install flask`  
-libiec61850 == 1.4.2  
-    install with;  
+### Flask 1.0.2  
+install with  
+ `~$ pip install flask`  
+
+### libiec61850 1.4.2  
+install with  
     `~$ git clone https://github.com/mz-automation/libiec61850/tree/v1.4.2 && cd libiec61850 && make dynlib && sudo make install`  
 NOTE: libiec61850.so.1.4.2 is assumed to be installed in $PATH, if the above command does not install in a location included in $PATH, add it manually
 
