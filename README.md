@@ -14,11 +14,14 @@ The scrol-wheel will zoom the graph. dragging the horizontal bar(smpCnt) will al
 
 Disabling the "listen for new streams" will stop updating the list of streams, and any detection of streams that match svID, but mismatch appid, source or destination mac. The chart with however keep updating, and will have fewer distortions due to lost packets.
 
+![Alt text](smvscope.png?raw=true "Screenshot of the SMV Scope")
+
 
 ## Limitations
  - 8 channels per stream are assumed, each consisting of an INT32 and a 4 byte quality BITSTRING, as per IEC61850 9-2 LE (this may be improved in the future)
  - only svID is used to filter out a stream. Therefore svID should be unique per sampled value stream
  - if streams with matching svID, but different appid, source or destination mac are detected, an error is shown in the log and the data will interfere with a stream that is being displayed in the graph.
+ - currently you cannot pause the chart  
 
 
 ## Dependencies:
