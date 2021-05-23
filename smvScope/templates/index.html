@@ -18,6 +18,8 @@
   <script>
 
 //https://nagix.github.io/chartjs-plugin-streaming/samples/zoom.html
+var maxSampleCount = 4000; //this can be 4000 or 4800
+
 
 var config = {
   type: 'line',
@@ -32,7 +34,7 @@ var config = {
           display: true,
           text: 'smpCnt',
         },
-        max: 4000,
+        max: maxSampleCount,
         minRotation: 0,
         maxRotation: 0,
       },
@@ -65,14 +67,6 @@ var config = {
           mode: 'xy',
           overScaleMode: 'y',
         },
-        limits: {
-          x: {
-            minDelay: 0,
-            maxDelay: 4000,
-            minDuration: 1000,
-            maxDuration: 20000,
-          }
-        }
       }
     }
   }
@@ -91,6 +85,13 @@ var config = {
               <input type="checkbox" class="form-check-input" id="enableListener" autocomplete="off" 
                 style="height: 30px; display: flex; align-items: center;" onchange="sendChange(this)">
               <label class="form-check-label" for="enableListener" style="margin: 7px 0 0;">Listen for new streams (disable to improve graph performance)</label>
+            </div>
+            <div>
+              <label for="range">Set chart range (samples/sec.):</label>
+              <select name="range" id="range" onchange="maxSampleCount = this.value; updateMaxSampleCount();">
+                <option value="4000">4000</option>
+                <option value="4800">4800</option>
+              </select> 
             </div>
           </div>
           <div>
@@ -206,13 +207,21 @@ function sendChangeMultiple(ref)
   });
 }
 
+function updateMaxSampleCount()
+{
+  config.data.labels = [];
+  config.data.labels.length = 0;
+  for(var index =1; index < maxSampleCount; index++) {
+    config.data.labels.push(index);
+  }
+  config.options.scales.x.max = maxSampleCount;
+}
+
 window.onload = function() {
   const ctx = document.getElementById('smvChart').getContext('2d');
   window.myChart = new Chart(ctx, config);
-  config.data.labels = [];
-  for(var index =1; index < 4000; index++) {
-    config.data.labels.push(index);
-  }
+
+  updateMaxSampleCount();
 
   const stream_source = new EventSource("/stream-data");
   stream_source.onmessage = function (event) {
@@ -250,7 +259,7 @@ window.onload = function() {
         curDataSet.data = []; //clear the data
 
         var index = 0;
-        for(var idx = 1; idx < 4000; idx++) {
+        for(var idx = 1; idx < maxSampleCount; idx++) {
           if(typeof cdata['dataSets'][svID][index] !== 'undefined'){
             var smpCnt = cdata['dataSets'][svID][index]['x'];
             if(idx == smpCnt ) {
