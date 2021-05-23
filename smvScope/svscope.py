@@ -11,7 +11,7 @@ import types
 from flask import Flask, Response, render_template, request
 
 import socket
-from struct import *
+from struct import unpack
 import threading
 import binascii
 
@@ -43,7 +43,7 @@ log_list = []
 
 # listbox data
 control_data_d['streamSelect_items'] = [] # list of streams
-control_data_d['streamSelect'] = { "streamValue": [] } # selected stream
+control_data_d['streamSelect'] = { "streamValue": [], "enableListener": True } # selected stream
 
 
 
@@ -72,6 +72,8 @@ def getSMVStreams(interface, duration):
     streams = []
 
     # handle duration
+    if duration < 0:
+        s.settimeout(1)        
     if duration == 0:
         s.settimeout(0)
         s.setblocking(0)
@@ -79,8 +81,8 @@ def getSMVStreams(interface, duration):
         s.settimeout(1)
         deadline = time.perf_counter() + duration
 
-    while True:
-        time.sleep(5.0) # TODO make this more configurable
+    print("streamListingThread started!")
+    while control_data_d["streamSelect"]["enableListener"] == True:
         if duration > 0 and time.perf_counter() > deadline:
             break
         try:
@@ -128,19 +130,30 @@ def getSMVStreams(interface, duration):
             streamList = streams
 
     s.close()
+    print("streamListingThread stopped!")
     return streams
 
 
 @application.route('/')
 def index():
+    global control_data_d_update
     control_data_d_update = True
     return render_template('index.html')
 
 
 def update_setting(subject, control, value):
+    global control_data_d_update
+    global control_data_d
+    if control == "enableListener":
+        global streamListingThread
+        if value == True:
+            if streamListingThread == None or streamListingThread.is_alive() == False:
+                streamListingThread = threading.Thread(target=getSMVStreams, args=(sys.argv[1],-1))
+                streamListingThread.start()
+        control_data_d[subject][control] = value 
+        control_data_d_update = True
+        return True
     if control == "streamValue":
-        global control_data_d
-        global control_data_d_update
         global streamList
         global subscribers_list
         global receiver
@@ -184,12 +197,16 @@ def update_setting(subject, control, value):
 def control_setting(): # post requests with data from client-side javascript events
     global control_data_d
     content = request.get_json(silent=True)
-    for subject in control_data_d:
-        if isinstance(control_data_d[subject], dict):    
-            for item in control_data_d[subject]:
-                if item == content['id']:
-                    if update_setting(subject, content['id'],content['value']) != True: # update the setting
-                        print_to_log("ERROR: could not update setting: " + content['id'])
+    if content['id'] == "refresh":
+        global control_data_d_update
+        control_data_d_update = True
+    else:
+        for subject in control_data_d:
+            if isinstance(control_data_d[subject], dict):    
+                for item in control_data_d[subject]:
+                    if item == content['id']:
+                        if update_setting(subject, content['id'],content['value']) != True: # update the setting
+                            print_to_log("ERROR: could not update setting: " + content['id'])
     return json.dumps({'success':True}), 200, {'ContentType':'application/json'} 
 
 
@@ -304,7 +321,7 @@ def svUpdateListener_cb(subscriber, parameter, asdu):
         if channel * 8 < size:
             indices[channel] =  {'y': lib61850.SVSubscriber_ASDU_getINT32(asdu, channel * 8) }
         else:
-            print_to_log("ERROR: cannot retrieve channel %i for svID: %s, size = ", (channel,svID,size)) 
+            print_to_log("ERROR: cannot retrieve channel %i for svID: %s, size = %i" % (channel,svID,size)) 
 
     # json list with { x: samplecount, index: [{y:_},{y:_},{y:_},...] }
     smv_data[svID][seconds].append( {'x': smpCnt, 'channels': indices } )
@@ -317,7 +334,7 @@ def svUpdateListener_cb(subscriber, parameter, asdu):
                              'seconds': seconds, 
                              'svID': str(lib61850.SVSubscriber_ASDU_getSvId(asdu)),
                              'confRev': lib61850.SVSubscriber_ASDU_getConfRev(asdu), 
-                             'smpSync': 0,#lib61850.SVSubscriber_ASDU_getSmpSynch(asdu),
+                             'smpSync': lib61850.SVSubscriber_ASDU_getSmpSynch(asdu),
                            }
         # OPTIONAL; not in 9-2 LE, source:https://knowledge.rtds.com/hc/en-us/article_attachments/360074685173/C_Kriger_Adewole_RTDS.pdf
         if lib61850.SVSubscriber_ASDU_hasDatSet(asdu) == True:
@@ -419,6 +436,7 @@ def determine_path():
 
 def start ():
     global receiver
+    global streamListingThread
     path = determine_path()
     print( "path:" + path )
     print("Data files path:")

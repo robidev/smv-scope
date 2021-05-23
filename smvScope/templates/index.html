@@ -26,14 +26,6 @@ var config = {
   },
   options: {
     animation: false,
-    tooltips: {
-        mode: 'index',
-        intersect: false,
-    },
-    hover: {
-        mode: 'nearest',
-        intersect: true,
-    },
     scales: {
       x: {
         title: { 
@@ -92,11 +84,22 @@ var config = {
     <div class="row">
         <div class="col-12">
           <div class="form-group">
-            <select class="mdb-select colorful-select md-form custom-select" multiple id="streamValue">
+            <label for="streamValue">List of available streams/channels: (click to visualise one or more stream/channels)</label>
+            <select class="mdb-select colorful-select md-form custom-select" multiple id="streamValue" style="height: 200px;">
             </select>
+            <div class="form-check form-switch">
+              <input type="checkbox" class="form-check-input" id="enableListener" autocomplete="off" 
+                style="height: 30px; display: flex; align-items: center;" onchange="sendChange(this)">
+              <label class="form-check-label" for="enableListener" style="margin: 7px 0 0;">Listen for new streams (disable to improve graph performance)</label>
+            </div>
           </div>
           <div>
             <canvas id="smvChart"></canvas>
+          </div>
+          <div>
+            Stream information:<BR>
+            <div id="info"></div>
+            <BR>
           </div>
           <div>
             <textarea class="form-control" rows="6" readonly id="log"></textarea>
@@ -149,11 +152,27 @@ function sendChange(ref)
   if(ref.type == "checkbox") value = ref.checked;
   else value = ref.value;
 
-  console.log(JSON.stringify({ "id": ref.id, "value": value }));
-
+  //console.log(JSON.stringify({ "id": ref.id, "value": value }));
   $.ajax({
       type: "POST",
       data: JSON.stringify({ "id": ref.id, "value": value }),
+      url: 'control-setting',
+      dataType: 'json',
+      contentType: "application/json",
+      success: function(res){
+          //console.log(res);
+      },
+      error: function(res){
+          console.log(res);
+      }
+  });
+}
+
+function refresh()
+{
+  $.ajax({
+      type: "POST",
+      data: JSON.stringify({ "id": "refresh", "value": 0 }),
       url: 'control-setting',
       dataType: 'json',
       contentType: "application/json",
@@ -171,8 +190,7 @@ function sendChangeMultiple(ref)
   var pref = ref.parentElement;
   var options = pref.selectedOptions;
   var values = Array.from(options).map(({ value }) => value);
-  console.log(values);
-
+  //console.log(values);
   $.ajax({
       type: "POST",
       data: JSON.stringify({ "id": pref.id, "value": values }),
@@ -202,8 +220,15 @@ window.onload = function() {
 
     var infos = ""
     for(var svID in cdata['stream_info']) {
-      infos += svID + " : " + JSON.stringify(cdata['stream_info'][svID]) + "<BR>";
+      infos += "svID: " + svID;
+      infos += ", channels: " + cdata['stream_info'][svID]['size']/8;
+      infos += ", confRev: " + cdata['stream_info'][svID]['confRev'];
+      infos += ", smpSync: " + cdata['stream_info'][svID]['smpSync'];
+      infos += ", seconds running: " + cdata['stream_info'][svID]['seconds'];
+      infos += "<BR>";
     }
+    const info = document.getElementById('info');
+    info.innerHTML = infos;
 
     var used = [];
     for(var svID in cdata['dataSets']) { //streams
@@ -213,7 +238,6 @@ window.onload = function() {
         config.data.datasets.forEach(function(dataset) { //search for this dataset
           if( dataset.label === dset){ // if found, add data to it
             curDataSet = dataset;
-              //return false; //TODO: prevent iteration over all existing datasets, but stop at the first match
           }
         });
         if(curDataSet == null){
@@ -222,14 +246,27 @@ window.onload = function() {
         }
         used.push(curDataSet);//register the dataset as in use
 
+        curDataSet.length = 0;
         curDataSet.data = []; //clear the data
-        for(var idx in cdata['dataSets'][svID]) { // TODO: run from 1 to 4000, and set null samples when missing
-          var smpCnt = cdata['dataSets'][svID][idx]['x'];
-          var yval = cdata['dataSets'][svID][idx]['channels'][channel]['y'];
-          
+
+        var index = 0;
+        for(var idx = 1; idx < 4000; idx++) {
+          if(typeof cdata['dataSets'][svID][index] !== 'undefined'){
+            var smpCnt = cdata['dataSets'][svID][index]['x'];
+            if(idx == smpCnt ) {
+              var yval = cdata['dataSets'][svID][index]['channels'][channel]['y'];
+              curDataSet.data.push({
+                x: smpCnt,
+                y: yval,
+              });
+              index++;
+              continue;
+            }
+          }
+          //add a null sample
           curDataSet.data.push({
-            x: smpCnt,
-            y: yval,
+            x: idx,
+            y: 0,
           });
         }
       }
@@ -300,6 +337,7 @@ window.onload = function() {
     }
   }
 
+  refresh();
 };
 </script>
 </body>
